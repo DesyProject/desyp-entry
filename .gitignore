@@ -1,0 +1,11 @@
+.gradle
+build/
+.idea
+*.iml
+out/
+.local/
+.serena/
+.env
+.env.*
+!.env.example
+logs/

@@ -1,0 +1,13 @@
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 15
+
+desyp:
+  event:
+    start-at: 2030-01-05T14:00:00+09:00
+    end-at: 2030-01-05T14:10:00+09:00
+    random-number: 7
+    allowed-origin: http://localhost:5173

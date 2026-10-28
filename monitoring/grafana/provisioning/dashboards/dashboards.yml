@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: desyp
+    folder: DesyP
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

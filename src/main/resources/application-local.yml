@@ -1,0 +1,7 @@
+# 로컬 모니터링용. logs/에 JSON 로그를 남기면 monitoring/의 Alloy가 읽어 Loki로 보낸다
+logging:
+  file:
+    name: logs/desyp-entry.log
+  structured:
+    format:
+      file: ecs

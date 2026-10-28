@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: desyp-entry
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+server:
+  port: ${PORT:8081}
+
+# 메인 이벤트는 수능 이후로 연기돼 날짜 미정이다. 기본값을 두지 않아 값 없이 실행되지 않게 한다
+desyp:
+  event:
+    start-at: ${EVENT_START_AT}
+    end-at: ${EVENT_END_AT}
+    random-number: ${EVENT_RANDOM_NUMBER}
+    allowed-origin: ${EVENT_ALLOWED_ORIGIN:https://www.desyp.site}
+    rate-limit: 1s
+    request-ttl: 10m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: desyp-entry
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
