@@ -33,7 +33,10 @@ public class FaultInjector {
         }
 
         try {
-            Files.createDirectories(markerFile.getParent());
+            Path parent = markerFile.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             Files.writeString(
                     markerFile,
                     currentPhase + ":" + requestId,
