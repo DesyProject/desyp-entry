@@ -20,7 +20,8 @@ desyp:
     start-at: ${EVENT_START_AT}
     end-at: ${EVENT_END_AT}
     random-number: ${EVENT_RANDOM_NUMBER}
-    allowed-origin: ${EVENT_ALLOWED_ORIGIN:https://www.desyp.site}
+    event-id: ${EVENT_ID:event-001}
+    allowed-origins: ${EVENT_ALLOWED_ORIGINS:http://localhost:5173}
     rate-limit: 1s
     request-ttl: 10m
 

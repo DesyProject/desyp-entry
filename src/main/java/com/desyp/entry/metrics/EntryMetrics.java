@@ -23,8 +23,8 @@ public class EntryMetrics {
                 .description("응모 Lua 스크립트 처리 시간")
                 .publishPercentileHistogram()
                 .register(registry);
-        Gauge.builder("desyp.entry.last.receipt", entryStore, EntryMetrics::lastReceiptOrNaN)
-                .description("지금까지 발급한 마지막 접수 번호")
+        Gauge.builder("desyp.entry.last.receipt", entryStore, EntryMetrics::lastRankOrNaN)
+                .description("지금까지 발급한 마지막 접수 순번")
                 .register(registry);
     }
 
@@ -37,9 +37,9 @@ public class EntryMetrics {
         return scriptTimer.record(call);
     }
 
-    private static double lastReceiptOrNaN(EntryStore entryStore) {
+    private static double lastRankOrNaN(EntryStore entryStore) {
         try {
-            return entryStore.lastReceiptNumber();
+            return entryStore.lastRank();
         } catch (RuntimeException e) {
             return Double.NaN;
         }

@@ -25,8 +25,8 @@ public class AppConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/event/**")
-                .allowedOrigins(properties.allowedOrigin())
-                .allowedMethods("GET", "POST")
+                .allowedOrigins(properties.allowedOrigins().toArray(String[]::new))
+                .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("Content-Type", "X-Client-Id")
                 .allowCredentials(false)
                 .maxAge(600);

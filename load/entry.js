@@ -63,7 +63,8 @@ export function enter() {
   );
   check(res, {
     'status 201': (r) => r.status === 201,
-    'receiptNumber': (r) => r.status === 201 && r.json('receiptNumber') > 0,
+    'rank': (r) => r.status === 201 && r.json('rank') > 0,
+    'created': (r) => r.status === 201 && r.json('created') === true,
   });
 }
 

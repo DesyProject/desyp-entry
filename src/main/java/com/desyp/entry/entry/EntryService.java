@@ -20,15 +20,13 @@ import org.springframework.stereotype.Service;
 public class EntryService {
 
     private static final Pattern INSTAGRAM_ID = Pattern.compile("^[a-z0-9._]{1,30}$");
-    private static final Pattern UUID_V4 =
-            Pattern.compile("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$");
 
     private final EventStatusService eventStatusService;
     private final EntryStore entryStore;
     private final Clock clock;
     private final EntryMetrics metrics;
 
-    public EntryResult submit(EntryRequest request, String clientIdHeader) {
+    public EntryResult submit(EntryRequest request) {
         if (eventStatusService.currentPhase() != EventPhase.OPEN) {
             metrics.count(EntryOutcome.CLOSED);
             throw new EntryException(HttpStatus.GONE, "지금은 응모 시간이 아닙니다.");
@@ -44,17 +42,17 @@ public class EntryService {
             throw new EntryException(HttpStatus.BAD_REQUEST, "Instagram 아이디 형식이 올바르지 않습니다.");
         }
 
-        String clientId = clientId(clientIdHeader);
-        long submittedAt = clock.millis();
-        EntryResult result = metrics.timeScript(() -> entryStore.submit(instagramId, requestId, clientId, submittedAt));
+        String acceptedAt = clock.instant().toString();
+        EntryResult result = metrics.timeScript(
+                () -> entryStore.submit(instagramId, requestId, acceptedAt));
         switch (result.outcome()) {
             case CREATED -> {
                 metrics.count(EntryOutcome.CREATED);
-                log.info("응모 접수 receiptNumber={}", result.receiptNumber());
+                log.info("응모 접수 rank={}", result.rank());
             }
             case REPLAYED -> {
                 metrics.count(EntryOutcome.REPLAYED);
-                log.info("재요청에 기존 번호 반환 receiptNumber={}", result.receiptNumber());
+                log.info("재요청에 기존 순번 반환 rank={}", result.rank());
             }
             case RATE_LIMITED -> {
                 metrics.count(EntryOutcome.RATE_LIMITED);
@@ -69,15 +67,6 @@ public class EntryService {
     /** 프론트와 같은 규칙: 앞의 @ 제거, 소문자 */
     static String normalizeInstagramId(String raw) {
         return raw.trim().replaceFirst("^@+", "").toLowerCase(Locale.ROOT);
-    }
-
-    /** 브라우저 고유값은 추적용이다. 형식이 틀리면 버리고 요청은 계속 처리한다 */
-    private static String clientId(String header) {
-        if (header == null) {
-            return "";
-        }
-        String value = header.trim().toLowerCase(Locale.ROOT);
-        return UUID_V4.matcher(value).matches() ? value : "";
     }
 
     private static boolean isUuid(String value) {

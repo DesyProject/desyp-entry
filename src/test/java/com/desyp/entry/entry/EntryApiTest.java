@@ -3,10 +3,13 @@ package com.desyp.entry.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -24,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -52,6 +56,12 @@ class EntryApiTest {
     @Autowired
     private StringRedisTemplate redis;
 
+    @Autowired
+    private EntryStore entryStore;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @MockitoBean
     private Clock clock;
 
@@ -65,26 +75,38 @@ class EntryApiTest {
     }
 
     @Test
-    void newEntriesReceiveIncreasingReceiptNumbers() throws Exception {
-        submit(uuid(), "first.user").andExpect(status().isCreated()).andExpect(jsonPath("$.receiptNumber").value(1));
+    void newEntriesReceiveIncreasingRanks() throws Exception {
+        String firstRequestId = uuid();
+        submit(firstRequestId, "first.user")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.requestId").value(firstRequestId))
+                .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.created").value(true));
         submit(uuid(), "second.user")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.receiptNumber").value(2));
+                .andExpect(jsonPath("$.rank").value(2));
     }
 
     @Test
-    void sameRequestIdReturnsFirstReceiptNumberWithoutRateLimit() throws Exception {
+    void sameRequestIdReturnsFirstRankWithoutRateLimit() throws Exception {
         String requestId = uuid();
-        submit(requestId, "retry.user").andExpect(status().isCreated()).andExpect(jsonPath("$.receiptNumber").value(1));
-        submit(requestId, "retry.user").andExpect(status().isOk()).andExpect(jsonPath("$.receiptNumber").value(1));
-        assertThat(redis.opsForStream().size(EntryStore.STREAM_KEY)).isEqualTo(1);
+        submit(requestId, "retry.user")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.created").value(true));
+        submit(requestId, "retry.user")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestId").value(requestId))
+                .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.created").value(false));
+        assertThat(redis.opsForStream().size(entryStore.streamKey())).isEqualTo(1);
     }
 
     @Test
     void sameInstagramIdWithinOneSecondIsRateLimited() throws Exception {
         submit(uuid(), "fast.user").andExpect(status().isCreated());
         submit(uuid(), "fast.user").andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.message").exists());
-        submit(uuid(), "other.user").andExpect(status().isCreated()).andExpect(jsonPath("$.receiptNumber").value(2));
+        submit(uuid(), "other.user").andExpect(status().isCreated()).andExpect(jsonPath("$.rank").value(2));
     }
 
     @Test
@@ -97,7 +119,7 @@ class EntryApiTest {
     void sameInstagramIdCanEnterAgainAfterOneSecond() throws Exception {
         submit(uuid(), "patient.user").andExpect(status().isCreated());
         Thread.sleep(1100);
-        submit(uuid(), "patient.user").andExpect(status().isCreated()).andExpect(jsonPath("$.receiptNumber").value(2));
+        submit(uuid(), "patient.user").andExpect(status().isCreated()).andExpect(jsonPath("$.rank").value(2));
     }
 
     @Test
@@ -108,7 +130,7 @@ class EntryApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body(uuid(), "good.id", true, false)))
                 .andExpect(status().isBadRequest());
-        assertThat(redis.opsForValue().get(EntryStore.SEQUENCE_KEY)).isNull();
+        assertThat(redis.opsForValue().get(entryStore.counterKey())).isNull();
     }
 
     @Test
@@ -120,19 +142,22 @@ class EntryApiTest {
     }
 
     @Test
-    void entryIsRecordedInStreamWithClientId() throws Exception {
+    void entryIsRecordedWithRelayWriterContract() throws Exception {
         String clientId = uuid();
+        String requestId = uuid();
         mockMvc.perform(post("/api/event/entries")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Client-Id", clientId)
-                        .content(body(uuid(), "stream.user", true, true)))
+                        .content(body(requestId, "stream.user", true, true)))
                 .andExpect(status().isCreated());
-        var records = redis.opsForStream().range(EntryStore.STREAM_KEY, Range.unbounded());
+        var records = redis.opsForStream().range(entryStore.streamKey(), Range.unbounded());
         assertThat(records).hasSize(1);
         assertThat(records.getFirst().getValue())
-                .containsEntry("receiptNumber", "1")
+                .containsEntry("requestId", requestId)
                 .containsEntry("instagramId", "stream.user")
-                .containsEntry("clientId", clientId);
+                .containsEntry("eventId", "event-001")
+                .containsEntry("rank", "1")
+                .containsEntry("acceptedAt", OPEN.toString());
     }
 
     @Test
@@ -181,7 +206,7 @@ class EntryApiTest {
             tasks.add(() -> {
                 MvcResult result = submit(uuid(), instagramId).andExpect(status().isCreated()).andReturn();
                 String json = result.getResponse().getContentAsString();
-                return Long.parseLong(json.replaceAll("\\D", ""));
+                return objectMapper.readTree(json).get("rank").longValue();
             });
         }
         Set<Long> numbers = new HashSet<>();
@@ -191,7 +216,26 @@ class EntryApiTest {
             }
         }
         assertThat(numbers).containsExactlyInAnyOrderElementsOf(LongStream.rangeClosed(1, count).boxed().toList());
-        assertThat(redis.opsForStream().size(EntryStore.STREAM_KEY)).isEqualTo(count);
+        assertThat(redis.opsForStream().size(entryStore.streamKey())).isEqualTo(count);
+    }
+
+    @Test
+    void allRedisKeysUseTheSameClusterHashTag() {
+        assertThat(entryStore.counterKey()).contains("{event-001}");
+        assertThat(entryStore.requestsKey()).contains("{event-001}");
+        assertThat(entryStore.streamKey()).contains("{event-001}");
+        assertThat(entryStore.rateKey("test.user")).contains("{event-001}");
+    }
+
+    @Test
+    void corsAllowsConfiguredOrigins() throws Exception {
+        mockMvc.perform(options("/api/event/entries")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:4173")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "http://localhost:4173"));
     }
 
     private void at(Instant instant) {

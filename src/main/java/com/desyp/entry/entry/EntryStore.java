@@ -17,11 +17,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class EntryStore {
 
-    static final String SEQUENCE_KEY = "entry:seq";
-    static final String STREAM_KEY = "entry:stream";
-    private static final String REQUEST_KEY_PREFIX = "entry:req:";
-    private static final String RATE_KEY_PREFIX = "entry:rate:";
-
     @SuppressWarnings("rawtypes")
     private static final RedisScript<List> ENTRY_SCRIPT = loadScript();
 
@@ -41,32 +36,52 @@ public class EntryStore {
         return script;
     }
 
-    public EntryResult submit(String instagramId, String requestId, String clientId, long submittedAtMillis) {
+    public EntryResult submit(String instagramId, String requestId, String acceptedAt) {
         List<?> result = redis.execute(
                 ENTRY_SCRIPT,
-                List.of(REQUEST_KEY_PREFIX + requestId, RATE_KEY_PREFIX + instagramId, SEQUENCE_KEY, STREAM_KEY),
+                List.of(requestsKey(), rateKey(instagramId), counterKey(), streamKey()),
                 String.valueOf(properties.rateLimit().toMillis()),
                 String.valueOf(properties.requestTtl().toMillis()),
                 instagramId,
                 requestId,
-                clientId,
-                String.valueOf(submittedAtMillis));
+                properties.eventId(),
+                acceptedAt);
         if (result == null || result.size() != 2) {
             throw new IllegalStateException("entry script returned an unexpected result");
         }
         long code = ((Number) result.get(0)).longValue();
-        long receiptNumber = ((Number) result.get(1)).longValue();
+        long rank = ((Number) result.get(1)).longValue();
         return switch ((int) code) {
-            case 0 -> EntryResult.created(receiptNumber);
-            case 1 -> EntryResult.replayed(receiptNumber);
+            case 0 -> EntryResult.created(rank);
+            case 1 -> EntryResult.replayed(rank);
             case 2 -> EntryResult.rateLimited();
             default -> throw new IllegalStateException("unknown entry script code: " + code);
         };
     }
 
-    /** 지금까지 발급한 마지막 접수 번호. 응모가 없으면 0 */
-    public long lastReceiptNumber() {
-        String value = redis.opsForValue().get(SEQUENCE_KEY);
+    /** 지금까지 발급한 마지막 접수 순번. 응모가 없으면 0 */
+    public long lastRank() {
+        String value = redis.opsForValue().get(counterKey());
         return value == null ? 0 : Long.parseLong(value);
+    }
+
+    String counterKey() {
+        return key("counter");
+    }
+
+    String requestsKey() {
+        return key("requests");
+    }
+
+    String streamKey() {
+        return key("outbox");
+    }
+
+    String rateKey(String instagramId) {
+        return key("rate:" + instagramId);
+    }
+
+    private String key(String suffix) {
+        return "event:{" + properties.eventId() + "}:" + suffix;
     }
 }

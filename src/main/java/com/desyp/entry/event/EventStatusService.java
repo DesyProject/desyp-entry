@@ -45,10 +45,10 @@ public class EventStatusService {
 
     /** 응모 수가 정해 둔 번호에 못 미치면 마지막 접수 번호가 당첨이다 */
     private Long announcedRandomNumber() {
-        long lastReceipt = entryStore.lastReceiptNumber();
-        if (lastReceipt == 0) {
+        long lastRank = entryStore.lastRank();
+        if (lastRank == 0) {
             return null;
         }
-        return Math.min(properties.randomNumber(), lastReceipt);
+        return Math.min(properties.randomNumber(), lastRank);
     }
 }

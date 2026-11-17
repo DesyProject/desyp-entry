@@ -1,4 +1,4 @@
 package com.desyp.entry.entry;
 
-public record EntryResponse(long receiptNumber) {
+public record EntryResponse(String requestId, long rank, boolean created) {
 }
