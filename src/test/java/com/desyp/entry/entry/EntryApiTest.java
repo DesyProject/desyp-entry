@@ -81,6 +81,7 @@ class EntryApiTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.requestId").value(firstRequestId))
                 .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.receiptNumber").value(1))
                 .andExpect(jsonPath("$.created").value(true));
         submit(uuid(), "second.user")
                 .andExpect(status().isCreated())
@@ -98,6 +99,7 @@ class EntryApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requestId").value(requestId))
                 .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.receiptNumber").value(1))
                 .andExpect(jsonPath("$.created").value(false));
         assertThat(redis.opsForStream().size(entryStore.streamKey())).isEqualTo(1);
     }
@@ -161,11 +163,11 @@ class EntryApiTest {
     }
 
     @Test
-    void statusRevealsRandomNumberOnlyAfterClose() throws Exception {
+    void statusRevealsWinningNumbersOnlyAfterClose() throws Exception {
         at(BEFORE);
         mockMvc.perform(get("/api/event/status"))
                 .andExpect(jsonPath("$.phase").value("BEFORE"))
-                .andExpect(jsonPath("$.randomNumber").doesNotExist());
+                .andExpect(jsonPath("$.winningNumbers").doesNotExist());
 
         at(OPEN);
         for (int i = 0; i < 3; i++) {
@@ -173,28 +175,40 @@ class EntryApiTest {
         }
         mockMvc.perform(get("/api/event/status"))
                 .andExpect(jsonPath("$.phase").value("OPEN"))
-                .andExpect(jsonPath("$.randomNumber").doesNotExist());
+                .andExpect(jsonPath("$.winningNumbers").doesNotExist());
 
-        // 응모 3건 < 정해 둔 번호 7 → 마지막 번호 3이 당첨
         at(CLOSED);
         mockMvc.perform(get("/api/event/status"))
                 .andExpect(jsonPath("$.phase").value("CLOSED"))
-                .andExpect(jsonPath("$.randomNumber").value(3));
+                .andExpect(jsonPath("$.winningNumbers.length()").value(3))
+                .andExpect(jsonPath("$.winningNumbers[0]").value(1))
+                .andExpect(jsonPath("$.winningNumbers[2]").value(3));
 
         at(OPEN);
-        for (int i = 3; i < 10; i++) {
+        for (int i = 3; i < 20; i++) {
             submit(uuid(), "user" + i).andExpect(status().isCreated());
         }
         at(CLOSED);
-        mockMvc.perform(get("/api/event/status")).andExpect(jsonPath("$.randomNumber").value(7));
+        mockMvc.perform(get("/api/event/status"))
+                .andExpect(jsonPath("$.winningNumbers.length()").value(18))
+                .andExpect(jsonPath("$.winningNumbers[0]").value(1))
+                .andExpect(jsonPath("$.winningNumbers[17]").value(18));
     }
 
     @Test
-    void closedEventWithoutEntriesHasNoRandomNumber() throws Exception {
+    void closedEventWithoutEntriesHasNoWinningNumbers() throws Exception {
         at(CLOSED);
         mockMvc.perform(get("/api/event/status"))
                 .andExpect(jsonPath("$.phase").value("CLOSED"))
-                .andExpect(jsonPath("$.randomNumber").doesNotExist());
+                .andExpect(jsonPath("$.winningNumbers").doesNotExist());
+    }
+
+    @Test
+    void counterDoesNotExpire() throws Exception {
+        submit(uuid(), "counter.user").andExpect(status().isCreated());
+
+        assertThat(redis.getExpire(entryStore.counterKey())).isEqualTo(-1L);
+        assertThat(redis.getExpire(entryStore.requestsKey())).isPositive();
     }
 
     @Test

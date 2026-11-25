@@ -9,6 +9,6 @@ desyp:
   event:
     start-at: 2030-01-05T14:00:00+09:00
     end-at: 2030-01-05T14:10:00+09:00
-    random-number: 7
+    winning-numbers: 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18
     event-id: event-001
     allowed-origins: http://localhost:5173,http://localhost:4173

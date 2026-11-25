@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,13 +25,13 @@ public class EventStatusService {
     public EventStatusResponse status() {
         Instant now = clock.instant();
         EventPhase phase = phaseAt(now);
-        Long randomNumber = phase == EventPhase.CLOSED ? announcedRandomNumber() : null;
+        List<Long> winningNumbers = phase == EventPhase.CLOSED ? announcedWinningNumbers() : null;
         return new EventStatusResponse(
                 phase,
                 properties.startAt(),
                 properties.endAt(),
                 OffsetDateTime.ofInstant(now, ZoneOffset.ofHours(9)),
-                randomNumber);
+                winningNumbers);
     }
 
     private EventPhase phaseAt(Instant now) {
@@ -43,12 +44,13 @@ public class EventStatusService {
         return EventPhase.CLOSED;
     }
 
-    /** 응모 수가 정해 둔 번호에 못 미치면 마지막 접수 번호가 당첨이다 */
-    private Long announcedRandomNumber() {
+    private List<Long> announcedWinningNumbers() {
         long lastRank = entryStore.lastRank();
         if (lastRank == 0) {
             return null;
         }
-        return Math.min(properties.randomNumber(), lastRank);
+        return properties.winningNumbers().stream()
+                .filter(number -> number <= lastRank)
+                .toList();
     }
 }

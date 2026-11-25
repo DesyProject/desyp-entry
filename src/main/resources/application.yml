@@ -19,7 +19,7 @@ desyp:
   event:
     start-at: ${EVENT_START_AT}
     end-at: ${EVENT_END_AT}
-    random-number: ${EVENT_RANDOM_NUMBER}
+    winning-numbers: ${EVENT_WINNING_NUMBERS}
     event-id: ${EVENT_ID:event-001}
     allowed-origins: ${EVENT_ALLOWED_ORIGINS:http://localhost:5173}
     rate-limit: 1s

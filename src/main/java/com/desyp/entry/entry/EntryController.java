@@ -26,6 +26,10 @@ public class EntryController {
         faultInjector.crashOnce(request.requestId(), "after-redis");
         HttpStatus status = result.outcome() == EntryResult.Outcome.CREATED ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status)
-                .body(new EntryResponse(request.requestId(), result.rank(), result.created()));
+                .body(new EntryResponse(
+                        request.requestId(),
+                        result.rank(),
+                        result.rank(),
+                        result.created()));
     }
 }

@@ -103,6 +103,5 @@ if type(outboxResult) == 'table' and outboxResult.err then
 end
 
 redis.pcall('PEXPIRE', KEYS[1], requestTtlMillis)
-redis.pcall('PEXPIRE', KEYS[3], requestTtlMillis)
 
 return {0, rank}
